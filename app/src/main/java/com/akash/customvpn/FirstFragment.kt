@@ -13,7 +13,6 @@ class FirstFragment : Fragment() {
 
     private var _binding: FragmentFirstBinding? = null
     private val binding get() = _binding!!
-    private var currentFilter: String = ""
     private var adapter: DomainAdapter? = null
 
     override fun onCreateView(
@@ -46,7 +45,7 @@ class FirstFragment : Fragment() {
         binding.editTextFilter.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                currentFilter = s.toString()
+                DomainRepository.setFilterText(s.toString())
                 filterAndPopulateList()
             }
             override fun afterTextChanged(s: Editable?) {}
@@ -66,6 +65,7 @@ class FirstFragment : Fragment() {
     private fun filterAndPopulateList() {
         val discovered = DomainRepository.discoveredDomains.value ?: emptySet()
         val blocked = DomainRepository.blockedDomains.value ?: emptySet()
+        val currentFilter = DomainRepository.filterText.value ?: ""
         
         val allDomains = discovered + blocked
         

@@ -1,9 +1,15 @@
 package com.akash.customvpn
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.DatagramPacket
@@ -17,10 +23,12 @@ class UrlBlockingVpnService : VpnService(), Runnable {
     private var mThread: Thread? = null
     private var mInterface: ParcelFileDescriptor? = null
     private val executorService = Executors.newFixedThreadPool(10)
+    private val CHANNEL_ID = "VpnAlertChannel"
 
     override fun onCreate() {
         super.onCreate()
         DomainRepository.init(this)
+        createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -33,6 +41,40 @@ class UrlBlockingVpnService : VpnService(), Runnable {
         mThread?.interrupt()
         executorService.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "VPN URL Alerts"
+            val descriptionText = "Notifications when a watched URL is detected"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun showDetectionNotification(domain: String) {
+        val blockIntent = Intent(this, NotificationReceiver::class.java).apply {
+            putExtra("domain", domain)
+        }
+        val blockPendingIntent = PendingIntent.getBroadcast(
+            this, domain.hashCode(), blockIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("URL Detected")
+            .setContentText("Found watched URL: $domain")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .addAction(R.drawable.ic_launcher_foreground, "Block Now", blockPendingIntent)
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(domain.hashCode(), builder.build())
     }
 
     override fun run() {
@@ -57,7 +99,15 @@ class UrlBlockingVpnService : VpnService(), Runnable {
                     val domain = extractDomainFromDnsPacket(buffer)
                     if (domain != null) {
                         DomainRepository.addDiscoveredDomain(domain)
-                        if (DomainRepository.isBlocked(domain)) {
+                        
+                        val isBlocked = DomainRepository.isBlocked(domain)
+                        val filterText = DomainRepository.filterText.value ?: ""
+
+                        if (!isBlocked && filterText.isNotEmpty() && domain.contains(filterText, ignoreCase = true)) {
+                            showDetectionNotification(domain)
+                        }
+
+                        if (isBlocked) {
                             Log.i("UrlBlockingVpn", "BLOCKING: $domain")
                             continue
                         }

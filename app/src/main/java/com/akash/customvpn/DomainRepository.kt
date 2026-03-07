@@ -16,6 +16,9 @@ object DomainRepository {
     private val _blockedDomains = MutableLiveData<Set<String>>(emptySet())
     val blockedDomains: LiveData<Set<String>> = _blockedDomains
 
+    private val _filterText = MutableLiveData<String>("")
+    val filterText: LiveData<String> = _filterText
+
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val savedDomains = prefs?.getStringSet(KEY_BLOCKED_DOMAINS, emptySet()) ?: emptySet()
@@ -38,6 +41,10 @@ object DomainRepository {
         }
         _blockedDomains.postValue(current)
         prefs?.edit()?.putStringSet(KEY_BLOCKED_DOMAINS, current)?.apply()
+    }
+
+    fun setFilterText(text: String) {
+        _filterText.postValue(text)
     }
 
     fun isBlocked(domain: String): Boolean {
