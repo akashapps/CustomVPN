@@ -22,6 +22,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize the repository with context to load saved blocked domains
+        DomainRepository.init(this)
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -31,13 +34,20 @@ class MainActivity : AppCompatActivity() {
         appBarConfiguration = AppBarConfiguration(navController.graph)
         setupActionBarWithNavController(navController, appBarConfiguration)
 
-        binding.fab.setOnClickListener { view ->
-            val intent = VpnService.prepare(this)
-            if (intent != null) {
-                startActivityForResult(intent, 0)
-            } else {
-                onActivityResult(0, Activity.RESULT_OK, null)
-            }
+        binding.fab.setOnClickListener {
+            checkAndStartVpn()
+        }
+
+        // Automatically attempt to start VPN when application starts
+        checkAndStartVpn()
+    }
+
+    private fun checkAndStartVpn() {
+        val intent = VpnService.prepare(this)
+        if (intent != null) {
+            startActivityForResult(intent, 0)
+        } else {
+            onActivityResult(0, Activity.RESULT_OK, null)
         }
     }
 

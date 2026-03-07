@@ -26,9 +26,16 @@ class DomainAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val domain = domains[position]
         holder.textView.text = domain
+        
+        // Remove listener before setting checked state to avoid unwanted triggers during binding
+        holder.checkBox.setOnCheckedChangeListener(null)
         holder.checkBox.isChecked = DomainRepository.isBlocked(domain)
-        holder.checkBox.setOnCheckedChangeListener { _, _ ->
-            onBlockToggled(domain)
+        
+        holder.checkBox.setOnCheckedChangeListener { _, isChecked ->
+            // Only toggle if the state actually changed to avoid redundant updates
+            if (isChecked != DomainRepository.isBlocked(domain)) {
+                onBlockToggled(domain)
+            }
         }
     }
 
