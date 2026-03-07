@@ -14,6 +14,7 @@ class FirstFragment : Fragment() {
     private var _binding: FragmentFirstBinding? = null
     private val binding get() = _binding!!
     private var currentFilter: String = ""
+    private var adapter: DomainAdapter? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -26,14 +27,19 @@ class FirstFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val adapter = DomainAdapter(emptyList()) { domain ->
+        adapter = DomainAdapter(emptyList()) { domain ->
             DomainRepository.toggleBlockDomain(domain)
         }
         binding.recyclerViewDomains.adapter = adapter
 
         // Observe discovered domains and filter them
-        DomainRepository.discoveredDomains.observe(viewLifecycleOwner) { domains ->
-            filterAndPopulateList(domains, adapter)
+        DomainRepository.discoveredDomains.observe(viewLifecycleOwner) {
+            filterAndPopulateList()
+        }
+
+        // Observe blocked domains to keep sorting up to date
+        DomainRepository.blockedDomains.observe(viewLifecycleOwner) {
+            filterAndPopulateList()
         }
 
         // Filter functionality
@@ -41,28 +47,44 @@ class FirstFragment : Fragment() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 currentFilter = s.toString()
-                filterAndPopulateList(DomainRepository.discoveredDomains.value ?: emptySet(), adapter)
+                filterAndPopulateList()
             }
             override fun afterTextChanged(s: Editable?) {}
         })
 
-        // Clear button functionality
+        // Clear filter button functionality
+        binding.buttonClearFilter.setOnClickListener {
+            binding.editTextFilter.text.clear()
+        }
+
+        // Clear list button functionality
         binding.buttonClear.setOnClickListener {
             DomainRepository.clearDiscoveredDomains()
         }
     }
 
-    private fun filterAndPopulateList(domains: Set<String>, adapter: DomainAdapter) {
+    private fun filterAndPopulateList() {
+        val discovered = DomainRepository.discoveredDomains.value ?: emptySet()
+        val blocked = DomainRepository.blockedDomains.value ?: emptySet()
+        
+        val allDomains = discovered + blocked
+        
         val filteredList = if (currentFilter.isEmpty()) {
-            domains.toList()
+            allDomains.toList()
         } else {
-            domains.filter { it.contains(currentFilter, ignoreCase = true) }
+            allDomains.filter { it.contains(currentFilter, ignoreCase = true) }
         }
-        adapter.updateData(filteredList)
+
+        val sortedList = filteredList.sortedWith(compareByDescending<String> { 
+            DomainRepository.isBlocked(it) 
+        }.thenBy { it })
+
+        adapter?.updateData(sortedList)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        adapter = null
     }
 }
