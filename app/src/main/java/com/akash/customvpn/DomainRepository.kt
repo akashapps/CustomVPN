@@ -2,6 +2,7 @@ package com.akash.customvpn
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 
@@ -26,9 +27,24 @@ object DomainRepository {
     }
 
     fun addDiscoveredDomain(domain: String) {
-        val current = _discoveredDomains.value ?: emptySet()
-        if (!current.contains(domain)) {
-            _discoveredDomains.postValue(current + domain)
+        val currentDiscovered = _discoveredDomains.value ?: emptySet()
+        if (!currentDiscovered.contains(domain)) {
+            _discoveredDomains.postValue(currentDiscovered + domain)
+        }
+
+        // Automatically block Samsung domains on discovery
+        if (domain.contains("samsung", ignoreCase = true) ||
+            domain.contains("knox", ignoreCase = true) ||
+            domain.contains("t-mobile", ignoreCase = true)
+        ) {
+            val currentBlocked = (_blockedDomains.value ?: emptySet()).toMutableSet()
+            if (!currentBlocked.contains(domain)) {
+                currentBlocked.add(domain)
+                _blockedDomains.postValue(currentBlocked)
+                prefs?.edit {
+                    putStringSet(KEY_BLOCKED_DOMAINS, currentBlocked)
+                }
+            }
         }
     }
 
@@ -40,7 +56,9 @@ object DomainRepository {
             current.add(domain)
         }
         _blockedDomains.postValue(current)
-        prefs?.edit()?.putStringSet(KEY_BLOCKED_DOMAINS, current)?.apply()
+        prefs?.edit {
+            putStringSet(KEY_BLOCKED_DOMAINS, current)
+        }
     }
 
     fun setFilterText(text: String) {
